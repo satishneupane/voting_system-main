@@ -1,0 +1,54 @@
+code
+Html
+{% extends "admin/change_list.html" %}
+{% load i18n %}
+
+{% block result_list %}
+    <!-- Custom Dashboard Section -->
+    <div style="margin-bottom: 20px; background: #fff; padding: 20px; border: 1px solid #ccc; border-radius: 5px;">
+        <h2 style="margin-top: 0;">📊 Live Election Dashboard</h2>
+        
+        <div style="display: flex; gap: 20px;">
+            <!-- Candidate Results -->
+            <div style="flex: 1;">
+                <h3>Top Candidates (FPTP)</h3>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr style="background: #f1f1f1; text-align: left;">
+                        <th style="padding: 8px;">Candidate</th>
+                        <th style="padding: 8px;">Votes</th>
+                    </tr>
+                    {% for c in candidate_votes|slice:":5" %}
+                    <tr>
+                        <td style="padding: 8px; border-bottom: 1px solid #eee;">{{ c.name }}</td>
+                        <td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>{{ c.vote_count }}</strong></td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="2" style="padding: 8px;">No votes yet.</td></tr>
+                    {% endfor %}
+                </table>
+            </div>
+
+            <!-- Party Results -->
+            <div style="flex: 1;">
+                <h3>Top Parties (PR)</h3>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr style="background: #f1f1f1; text-align: left;">
+                        <th style="padding: 8px;">Party</th>
+                        <th style="padding: 8px;">Votes</th>
+                    </tr>
+                    {% for p in party_votes|slice:":5" %}
+                    <tr>
+                        <td style="padding: 8px; border-bottom: 1px solid #eee;">{{ p.name }}</td>
+                        <td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>{{ p.vote_count }}</strong></td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="2" style="padding: 8px;">No votes yet.</td></tr>
+                    {% endfor %}
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Render the standard Django list below our dashboard -->
+    {{ block.super }}
+{% endblock %}
