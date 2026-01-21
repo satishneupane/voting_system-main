@@ -1,64 +1,53 @@
-"""
-This module is responsible for:
-- Recording votes (Candidate or Party)
-- Enforcing one-vote-per-user
-- Calling permission checks from STEP 1
-
-IMPORTANT:
-- This file is the ONLY place votes are saved
-- Views/APIs should never save votes directly
-"""
-
 from django.db import transaction
+from django.core.exceptions import ValidationError
 
-from elections.models import Vote, Party
-from elections.services.vote_permissions import (
-    validate_user_profile,
-    validate_candidate_access,
-    VotePermissionError,
-)
+from elections.models import Vote, Candidate, Party, ElectionControl
 
 
-class VoteSubmissionError(Exception):
+def is_voting_open():
+    control = ElectionControl.objects.first()
+    return bool(control and control.is_voting_open)
+
+
+def ensure_user_has_not_voted(user, vote_type):
+    if Vote.objects.filter(voter=user, vote_type=vote_type).exists():
+        raise ValidationError(f"You have already voted ({vote_type}).")
+
+
+def validate_candidate_strict(user, candidate_id):
     """
-    Raised when a vote cannot be submitted
-    (duplicate vote, invalid data, etc.)
+    HARD rule:
+    Candidate MUST belong to user's electoral area
     """
-    pass
+    if not user.electoral_area:
+        raise ValidationError("User has no electoral area assigned.")
 
+    try:
+        candidate = Candidate.objects.select_related("electoral_area").get(id=candidate_id)
+    except Candidate.DoesNotExist:
+        raise ValidationError("Invalid candidate.")
 
-def ensure_user_has_not_voted(user):
-    """
-    Prevent multiple voting.
+    if candidate.electoral_area_id != user.electoral_area_id:
+        raise ValidationError(
+            "You are not allowed to vote for candidates outside your electoral area."
+        )
 
-    Raises:
-        VoteSubmissionError if user already voted
-    """
-    if hasattr(user, "vote"):
-        raise VoteSubmissionError("User has already voted")
+    return candidate
 
 
 @transaction.atomic
 def submit_candidate_vote(user, candidate_id):
     """
-    Submit a FPTP (Candidate-based) vote.
-
-    Flow:
-    1. Validate user profile
-    2. Ensure user has not voted
-    3. Validate candidate access (STEP 1)
-    4. Save vote atomically
-
-    Returns:
-        Vote instance
+    Submit FPTP vote (STRICT)
     """
-    # STEP 1 validations
-    validate_user_profile(user)
-    ensure_user_has_not_voted(user)
+    if not is_voting_open():
+        raise ValidationError("Voting is currently closed.")
 
-    candidate = validate_candidate_access(user, candidate_id)
+    ensure_user_has_not_voted(user, "FPTP")
 
-    vote = Vote.objects.create(
+    candidate = validate_candidate_strict(user, candidate_id)
+
+    return Vote.objects.create(
         voter=user,
         vote_type="FPTP",
         candidate=candidate,
@@ -67,38 +56,27 @@ def submit_candidate_vote(user, candidate_id):
         electoral_area=user.electoral_area,
     )
 
-    return vote
-
 
 @transaction.atomic
 def submit_party_vote(user, party_id):
     """
-    Submit a PR (Party-based) vote.
-
-    Flow:
-    1. Validate user profile
-    2. Ensure user has not voted
-    3. Validate party
-    4. Save vote atomically
-
-    Returns:
-        Vote instance
+    Submit PR vote
     """
-    # STEP 1 validations
-    validate_user_profile(user)
-    ensure_user_has_not_voted(user)
+    if not is_voting_open():
+        raise ValidationError("Voting is currently closed.")
+
+    ensure_user_has_not_voted(user, "PR")
 
     try:
         party = Party.objects.get(id=party_id, is_active=True)
     except Party.DoesNotExist:
-        raise VotePermissionError("Invalid or inactive party")
+        raise ValidationError("Invalid party.")
 
-    vote = Vote.objects.create(
+    return Vote.objects.create(
         voter=user,
         vote_type="PR",
         party=party,
         province=user.province,
         district=user.district,
+        electoral_area=user.electoral_area,
     )
-
-    return vote

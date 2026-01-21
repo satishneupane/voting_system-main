@@ -8,6 +8,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.db import transaction
 from django.db.models import Count
 from django.contrib.admin.views.decorators import staff_member_required
+from django.core.exceptions import ValidationError
 
 from .models import (
     District,
@@ -27,7 +28,6 @@ from elections.services.vote_permissions import (
 from elections.services.vote_submission import (
     submit_candidate_vote,
     submit_party_vote,
-    VoteSubmissionError,
 )
 from elections.services.vote_visibility import (
     get_voting_context_for_user,
@@ -156,49 +156,38 @@ def is_voting_open():
 @login_required
 def submit_vote(request):
     """
-    Submit FPTP (candidate) or PR (party) vote
+    Unified vote endpoint (SAFE)
     """
-    user = request.user
-
-    if not is_voting_open():
-        return JsonResponse({"error": "Voting is currently closed."}, status=403)
-
-    if not user.is_authenticated:
-        return JsonResponse({"error": "Authentication required."}, status=401)
-
     vote_type = request.POST.get("vote_type")
-    if vote_type not in ("FPTP", "PR"):
-        return JsonResponse({"error": "Invalid vote type."}, status=400)
 
-    if Vote.objects.filter(voter=user, vote_type=vote_type).exists():
-        return JsonResponse({"error": "You have already voted."}, status=409)
+    try:
+        if vote_type == "FPTP":
+            candidate_id = request.POST.get("candidate_id")
+            if not candidate_id:
+                return JsonResponse(
+                    {"error": "candidate_id is required for FPTP vote"},
+                    status=400,
+                )
 
-    vote = Vote(
-        voter=user,
-        vote_type=vote_type,
-        province=user.province,
-        district=user.district,
-        electoral_area=user.electoral_area,
-    )
+            submit_candidate_vote(request.user, candidate_id)
 
-    if vote_type == "FPTP":
-        candidate_id = request.POST.get("candidate_id")
-        if not candidate_id:
-            return JsonResponse({"error": "candidate_id is required for FPTP vote."}, status=400)
-        candidate = get_object_or_404(Candidate, id=candidate_id)
-        if candidate.electoral_area != user.electoral_area:
-            return JsonResponse({"error": "Candidate is not in your electoral area."}, status=403)
-        vote.candidate = candidate
+        elif vote_type == "PR":
+            party_id = request.POST.get("party_id")
+            if not party_id:
+                return JsonResponse(
+                    {"error": "party_id is required for PR vote"},
+                    status=400,
+                )
 
-    elif vote_type == "PR":
-        party_id = request.POST.get("party_id")
-        if not party_id:
-            return JsonResponse({"error": "party_id is required for PR vote."}, status=400)
-        party = get_object_or_404(Party, id=party_id)
-        vote.party = party
+            submit_party_vote(request.user, party_id)
 
-    vote.save()
-    return JsonResponse({"success": "Vote recorded successfully."}, status=201)
+        else:
+            return JsonResponse({"error": "Invalid vote type"}, status=400)
+
+        return JsonResponse({"success": "Vote recorded successfully"}, status=201)
+
+    except ValidationError as e:
+        return JsonResponse({"error": str(e)}, status=403)
 
 # ------------------------------
 # Candidate / Party Listings
@@ -246,7 +235,7 @@ def test_submit_candidate_vote(request):
     try:
         vote = submit_candidate_vote(request.user, candidate_id)
         return JsonResponse({"status": "success", "vote_id": vote.id, "type": vote.vote_type})
-    except (VoteSubmissionError, VotePermissionError) as e:
+    except (ValidationError, VotePermissionError) as e:
         return JsonResponse({"error": str(e)}, status=403)
 
 
@@ -258,7 +247,7 @@ def test_submit_party_vote(request):
     try:
         vote = submit_party_vote(request.user, party_id)
         return JsonResponse({"status": "success", "vote_id": vote.id, "type": vote.vote_type})
-    except (VoteSubmissionError, VotePermissionError) as e:
+    except (ValidationError, VotePermissionError) as e:
         return JsonResponse({"error": str(e)}, status=403)
 
 
