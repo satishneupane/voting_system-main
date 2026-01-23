@@ -43,7 +43,9 @@ class CustomUserAdmin(UserAdmin):
     fieldsets = UserAdmin.fieldsets + (
         ('Voting Details', {'fields': ('province', 'district', 'electoral_area')}),
     )
-
+    add_fieldsets = UserAdmin.add_fieldsets + (
+        ('Additional Info', {'fields': ('province', 'district', 'electoral_area')}),
+    )
     class Media:
         js = ("elections/admin.js",)  # Auto-filter districts JS
 
@@ -54,12 +56,14 @@ class CustomUserAdmin(UserAdmin):
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.name == 'district':
-            if request._obj_ and request._obj_.province:
+            if request.POST.get('province'):
+                province_id = request.POST.get('province')
+                kwargs['queryset'] = District.objects.filter(province__id=province_id)
+            elif request._obj_ and request._obj_.province:
                 kwargs['queryset'] = District.objects.filter(province=request._obj_.province)
             else:
-                kwargs['queryset'] = District.objects.none()
+                kwargs['queryset'] = District.objects.all()
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
-
 
 # -----------------------------
 # Electoral Area Admin
@@ -115,7 +119,7 @@ class VoteAdmin(admin.ModelAdmin):
         "id",
         "voter",
         "vote_type",
-        "candidate_or_party",
+        "candidate",
         "party",
         "province",
         "district",
@@ -123,17 +127,25 @@ class VoteAdmin(admin.ModelAdmin):
         "created_at",
     )
 
-    list_filter = (
+    readonly_fields = (
+        "voter",
         "vote_type",
+        "candidate",
+        "party",
         "province",
         "district",
+        "electoral_area",
+        "created_at",
     )
 
-    search_fields = (
-        "voter__username",
-        "candidate__name",
-        "party__name",
-    )
+    def has_add_permission(self, request):
+        return False  # 🚫 no adding votes
+
+    def has_change_permission(self, request, obj=None):
+        return False  # 🚫 no editing votes
+
+    def has_delete_permission(self, request, obj=None):
+        return False  # 🚫 no deleting votes
 
     # Show Candidate or Party depending on vote type
     def candidate_or_party(self, obj):

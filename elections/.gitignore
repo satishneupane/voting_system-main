@@ -1,0 +1,11 @@
+# Python cache
+__pycache__/
+*.pyc
+
+
+# Django migrations cache (optional to ignore compiled pyc)
+*/migrations/__pycache__/
+
+# OS files
+.DS_Store
+Thumbs.db

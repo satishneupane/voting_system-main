@@ -87,6 +87,9 @@ DATABASES = {
             'unix_socket': '/var/run/mysqld/mysqld.sock',
             'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
         },
+        'TEST': {
+            'NAME': 'voting_system_test',
+        },
     }
 }
 
