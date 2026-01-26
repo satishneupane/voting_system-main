@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     'elections.apps.ElectionsConfig',
     "corsheaders",
+    "rest_framework",
 ]
 
 MIDDLEWARE = [
@@ -150,3 +151,12 @@ SESSION_COOKIE_SECURE = False  # set True in production
 SESSION_COOKIE_SAMESITE = "Lax"  # "Strict" or "None" in production with HTTPS
 # Optional: use server-side sessions with database (default)
 #SESSION_ENGINE = "django.contrib.sessions.backends.db"
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework.authentication.SessionAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
+}

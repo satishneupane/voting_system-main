@@ -2,6 +2,7 @@ from django.db import models
 from django.db.models import Q, F
 from django.core.exceptions import ValidationError
 from django.contrib.auth.models import AbstractUser
+from datetime import timezone
 
 # ==============================
 # Province & District
@@ -113,6 +114,7 @@ class Candidate(models.Model):
         on_delete=models.SET_NULL,
         related_name="candidates"
     )
+    is_nota = models.BooleanField(default=False)  # None of the Above option
 
     def __str__(self):
         return f"{self.name} ({self.electoral_area})"
@@ -277,6 +279,9 @@ class ElectionControl(models.Model):
             raise ValidationError("Election cannot be closed earlier than it starts.")
     def save(self, *args, **kwargs):
         self.clean()
+        now = timezone.now()
+        if self.opened_at and self.closed_at:
+            self.is_voting_open = self.opened_at <= now <= self.closed_at
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -284,7 +289,7 @@ class ElectionControl(models.Model):
 
     class Meta:
         verbose_name = "Election Control"
-        verbose_name_plural = "Election Control"
+        verbose_name_plural = "Election Controls"
 
 
 # ==============================

@@ -18,7 +18,7 @@ from .models import (
     ElectionControl,
 )
 from .utils import fptp_winners, pr_seat_allocation
-from elections.services.vote_submission import submit_vote
+from elections.services.vote_submission import submit_vote, has_user_voted
 from elections.services.vote_visibility import (
     get_voting_context_for_user,
     VoteVisibilityError,
@@ -132,9 +132,32 @@ def submit_vote_view(request):
     candidate_id = request.POST.get("candidate_id")
     party_id = request.POST.get("party_id")
 
+    # Convert NOTA votes from frontend (id=0) to None
+    if vote_type == "FPTP" and str(candidate_id) == "0":
+        candidate_id = None  # Treat FPTP NOTA as None
+
+    # Check if user already voted for this type
+    if has_user_voted(request.user, vote_type):
+        return JsonResponse(
+            {"error": "You have already voted for this type", "already_voted": True},
+            status=403
+        )
+
     try:
-        vote = submit_vote(user=request.user, vote_type=vote_type, candidate_id=candidate_id, party_id=party_id)
-        return JsonResponse({"success": "Vote recorded successfully", "vote_id": vote.id}, status=201)
+        vote = submit_vote(
+            user=request.user,
+            vote_type=vote_type,
+            candidate_id=candidate_id,
+            party_id=party_id
+        )
+        return JsonResponse(
+            {
+                "success": "Vote recorded successfully",
+                "vote_id": vote.id,
+                "already_voted": False
+            },
+            status=201
+        )
     except ValidationError as e:
         return JsonResponse({"error": str(e)}, status=403)
 
@@ -144,22 +167,55 @@ def submit_vote_view(request):
 # ------------------------------
 @login_required
 def get_candidates(request):
-    if not request.user.electoral_area:
+    user = request.user
+    user_area = user.electoral_area
+
+    if not user_area:
         return JsonResponse({"error": "User has no electoral area"}, status=400)
 
-    return JsonResponse(
-        list(
-            request.user.electoral_area.candidates.values("id", "name")
-        ),
-        safe=False,
+    # Include all candidates in this electoral area
+    candidates = list(
+        user_area.candidates.values("id", "name", "party__name")
     )
 
+    # Add NOTA dynamically if not present
+    if not any(c.get("is_nota") for c in candidates):
+        candidates.append({
+            "id": 0,  # frontend treats id=0 as NOTA
+            "name": "None of the Above (NOTA)",
+            "party__name": None,
+            "is_nota": True,
+        })
 
+    # Voting status
+    voting_status = {
+        "FPTP": has_user_voted(user, "FPTP"),
+        "PR": has_user_voted(user, "PR"),
+    }
+
+    return JsonResponse({
+        "candidates": candidates,
+        "voting_status": voting_status
+    })
+
+
+@login_required
 def get_parties(request):
-    return JsonResponse(
-        list(Party.objects.filter(is_active=True).values("id", "name", "symbol")),
-        safe=False,
+    # Active parties
+    parties = list(
+        Party.objects.filter(is_active=True).values("id", "name", "symbol")
     )
+
+    # Voting status
+    voting_status = {
+        "FPTP": has_user_voted(request.user, "FPTP"),
+        "PR": has_user_voted(request.user, "PR"),
+    }
+
+    return JsonResponse({
+        "parties": parties,
+        "voting_status": voting_status
+    })
 
 
 # ------------------------------
@@ -235,12 +291,40 @@ def seats_summary(request):
 # ------------------------------
 @login_required
 def voter_profile(request):
-    u = request.user
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "Authentication required"}, status=403)
+
+    user = request.user
+    # ✅ Check if already voted
+    fptp_voted = Vote.objects.filter(voter=user, vote_type="FPTP").exists()
+    pr_voted = Vote.objects.filter(voter=user, vote_type="PR").exists()
+
     return JsonResponse({
-        "id": u.id,
-        "username": u.username,
-        "email": u.email,
-        "province": u.province.name if u.province else None,
-        "district": u.district.name if u.district else None,
-        "electoral_area": u.electoral_area.name if u.electoral_area else None,
+        "username": user.username,
+        "email": user.email,
+        "province": user.province.name if user.province else None,
+        "district": user.district.name if user.district else None,
+        "electoral_area": user.electoral_area.name if user.electoral_area else None,
+        "has_voted": {
+            "FPTP": fptp_voted,
+            "PR": pr_voted,
+        }
+    })
+
+#---------------------------
+# Voter Status Check
+#---------------------------
+@login_required
+def voter_status(request):
+    user = request.user
+    voting_status = has_user_voted(user)
+
+    return JsonResponse({
+        "username": user.username,
+        "email": user.email,
+        "province": user.province.name if user.province else None,
+        "district": user.district.name if user.district else None,
+        "electoral_area": str(user.electoral_area) if user.electoral_area else None,
+        "has_voted_fptp": voting_status["fptp"],
+        "has_voted_pr": voting_status["pr"],
     })

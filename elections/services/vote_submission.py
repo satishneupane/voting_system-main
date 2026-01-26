@@ -142,3 +142,16 @@ def submit_party_vote(user, party_id):
         district=user.district,
         electoral_area=user.electoral_area,
     )
+#=========================
+# Check if User has Voted
+#=========================
+def has_user_voted(user, vote_type):
+    """
+    Returns True if the given user has already voted for the specified vote_type.
+    vote_type must be 'FPTP' or 'PR'.
+    """
+    return Vote.objects.filter(
+        voter=user,
+        vote_type=vote_type
+    ).exists()
+    
