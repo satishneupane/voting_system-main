@@ -73,8 +73,16 @@ def submit_vote(user, vote_type, candidate_id=None, party_id=None):
 
     # 3️⃣ FPTP vote
     if vote_type == "FPTP":
-        if not candidate_id:
-            raise ValidationError("candidate_id is required for FPTP vote.")
+        if candidate_id is None:
+            # NOTA vote
+            return Vote.objects.create(
+                voter=user,
+                vote_type="FPTP",
+                candidate=None,
+                province=user.province,
+                district=user.district,
+                electoral_area=user.electoral_area,
+            )
         try:
             candidate = Candidate.objects.get(id=candidate_id)
         except Candidate.DoesNotExist:

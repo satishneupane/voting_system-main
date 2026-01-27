@@ -78,19 +78,8 @@ WSGI_APPLICATION = "voting_system.wsgi.application"
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'voting_system',
-        'USER': 'voting_user',
-        'PASSWORD': 'Root@123',
-        'HOST': 'localhost',
-        'PORT': '3306',
-        'OPTIONS': {
-            'unix_socket': '/var/run/mysqld/mysqld.sock',
-            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
-        },
-        'TEST': {
-            'NAME': 'voting_system_test',
-        },
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
 
@@ -133,10 +122,7 @@ STATIC_URL = "static/"
 
 AUTH_USER_MODEL = 'elections.User'
 
-CORS_ALLOW_ORIGINS = [
-    "http://localhost:3000",
-    "http://localhost:8000",
-]
+CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
 
 #----Session Settings----
