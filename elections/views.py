@@ -8,6 +8,7 @@ from django.db import transaction
 from django.db.models import Count
 from django.contrib.admin.views.decorators import staff_member_required
 from django.core.exceptions import ValidationError
+from django.utils import timezone
 
 from .models import (
     District,
@@ -49,9 +50,9 @@ def register_voter(request):
         name = data.get("name")
         email = data.get("email")
         password = data.get("password")
-        province_name = data.get("province_id")
-        district_name = data.get("district_id")
-        electoral_area_name = data.get("electoral_area")
+        province_name = data.get("province_name")
+        district_name = data.get("district_name")
+        electoral_area_name = data.get("electoral_area_name")
 
         if not all([name, email, password, province_name, district_name, electoral_area_name]):
             return JsonResponse({"error": "All fields are required"}, status=400)
@@ -125,6 +126,7 @@ def voter_logout(request):
 # ------------------------------
 # Vote Submission (ONLY ENTRY POINT)
 # ------------------------------
+@csrf_exempt
 @require_POST
 @login_required
 def submit_vote_view(request):
@@ -317,7 +319,8 @@ def voter_profile(request):
 @login_required
 def voter_status(request):
     user = request.user
-    voting_status = has_user_voted(user)
+    has_fptp = has_user_voted(user, "FPTP")
+    has_pr = has_user_voted(user, "PR")
 
     return JsonResponse({
         "username": user.username,
@@ -325,6 +328,22 @@ def voter_status(request):
         "province": user.province.name if user.province else None,
         "district": user.district.name if user.district else None,
         "electoral_area": str(user.electoral_area) if user.electoral_area else None,
-        "has_voted_fptp": voting_status["fptp"],
-        "has_voted_pr": voting_status["pr"],
+        "has_voted_fptp": has_fptp,
+        "has_voted_pr": has_pr,
     })
+
+
+#-lock check--------
+def is_election_active():
+    control = ElectionControl.objects.first()
+    if not control:
+        return False
+        
+    now = timezone.now()
+    
+    # Check if we are currently within the time window
+    if control.opened_at and control.closed_at:
+        return control.opened_at <= now <= control.closed_at
+        
+    # Fallback to the manual switch if dates aren't set
+    return control.is_voting_open

@@ -2,7 +2,7 @@ from django.db import models
 from django.db.models import Q, F
 from django.core.exceptions import ValidationError
 from django.contrib.auth.models import AbstractUser
-from datetime import timezone
+from django.utils import timezone
 
 # ==============================
 # Province & District
