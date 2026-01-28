@@ -54,11 +54,12 @@ def register_voter(request):
         district_name = data.get("district_name")
         electoral_area_name = data.get("electoral_area_name")
 
+        # Check if email already exists first (before validating other fields)
+        if email and User.objects.filter(username=email).exists():
+            return JsonResponse({"error": "User already exists"}, status=400)
+
         if not all([name, email, password, province_name, district_name, electoral_area_name]):
             return JsonResponse({"error": "All fields are required"}, status=400)
-
-        if User.objects.filter(username=email).exists():
-            return JsonResponse({"error": "User already exists"}, status=400)
 
         province = Province.objects.get(name=province_name)
         district = District.objects.get(name=district_name, province=province)
