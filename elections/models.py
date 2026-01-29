@@ -224,7 +224,7 @@ class Vote(models.Model):
 
         # 2️⃣ Vote type consistency: FPTP <-> candidate, PR <-> party
             models.CheckConstraint(
-                condition=(
+                check=(
                     Q(vote_type="FPTP", candidate__isnull=False, party__isnull=True) |
                     Q(vote_type="PR", party__isnull=False, candidate__isnull=True)
                 ),
@@ -233,13 +233,13 @@ class Vote(models.Model):
 
         # 3️⃣ Location fields must never be NULL
             models.CheckConstraint(
-                condition=Q(province__isnull=False) & Q(district__isnull=False) & Q(electoral_area__isnull=False),
+                check=Q(province__isnull=False) & Q(district__isnull=False) & Q(electoral_area__isnull=False),
                 name="vote_location_not_null",
             ),
 
         # 4️⃣ Candidate must belong to user's electoral area
             models.CheckConstraint(
-                condition=Q(candidate__isnull=True) | Q(candidate__electoral_area=F("electoral_area")),
+                check=Q(candidate__isnull=True) | Q(candidate__electoral_area=F("electoral_area")),
                 name="candidate_electoral_area_match",
             ),
         ]
@@ -255,7 +255,7 @@ class Vote(models.Model):
             # FPTP must have candidate ONLY
             models.CheckConstraint(
                 name="fptp_requires_candidate",
-                condition=Q(
+                check=Q(
                     vote_type="FPTP",
                     candidate__isnull=False,
                     party__isnull=True,
@@ -266,7 +266,7 @@ class Vote(models.Model):
             # PR must have party ONLY
             models.CheckConstraint(
                 name="pr_requires_party",
-                condition=Q(
+                check=Q(
                     vote_type="PR",
                     party__isnull=False,
                     candidate__isnull=True,
