@@ -49,37 +49,52 @@ Then try activating again.
 
 ## Step 4: Install Dependencies
 
-Create a `requirements.txt` file in the root directory with the following content:
-
-```txt
-Django==6.0
-requests==2.31.0
-django-cors-headers
-
-```
-
-Then install:
-
 ```powershell
 pip install -r requirements.txt
 ```
 
-## Step 5: Configure Database
+This will install all required packages including Django, mysqlclient, and other dependencies.
 
-### Option A: SQLite (Recommended for Development)
+## Step 5: Configure MySQL Database
 
-Edit `voting_system/settings.py` and set:
+### Option A: Local MySQL Installation
 
-```python
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
-}
+1. **Install MySQL**: Download from [mysql.com](https://www.mysql.com/downloads/)
+
+2. **Create Database and User**:
+
+   ```sql
+   CREATE DATABASE voting_system;
+   CREATE USER 'voting_user'@'localhost' IDENTIFIED BY 'voting_password';
+   GRANT ALL PRIVILEGES ON voting_system.* TO 'voting_user'@'localhost';
+   FLUSH PRIVILEGES;
+   ```
+
+3. **Configure Environment Variables**:
+   - Copy `.env.example` to `.env`
+   - Update with your MySQL credentials if different:
+   ```env
+   DB_NAME=voting_system
+   DB_USER=voting_user
+   DB_PASSWORD=voting_password
+   DB_HOST=localhost
+   DB_PORT=3306
+   ```
+
+### Option B: Docker (Recommended)
+
+Use Docker Compose to run MySQL in a container:
+
+```powershell
+docker-compose up -d
 ```
 
-also delete db.sqlite3 file first
+This will:
+
+- Start MySQL 8.0 container
+- Create the database and user automatically
+- Start the Django web server
+- All environment variables are pre-configured
 
 ## Step 6: Run Migrations
 
@@ -87,7 +102,7 @@ also delete db.sqlite3 file first
 python manage.py migrate
 ```
 
-This will create all necessary database tables.
+This will create all necessary database tables in MySQL.
 
 ## Step 7: Create Superuser (Optional)
 
@@ -101,8 +116,16 @@ Follow the prompts to set username, email, and password.
 
 ## Step 8: Start the Server
 
+**Option A: Local Development (with local MySQL)**
+
 ```powershell
 python manage.py runserver
+```
+
+**Option B: Docker (with containerized MySQL)**
+
+```powershell
+docker-compose up
 ```
 
 Server will be available at: **http://127.0.0.1:8000/**
@@ -113,31 +136,44 @@ Server will be available at: **http://127.0.0.1:8000/**
 
 - [ ] Git cloned successfully
 - [ ] Virtual environment created and activated
-- [ ] Dependencies installed (django, mysqlclient, requests)
-- [ ] Database configured (SQLite or MySQL)
+- [ ] Dependencies installed (Django, mysqlclient, requests, etc.)
+- [ ] MySQL installed and running (or Docker configured)
+- [ ] Database and user created
+- [ ] `.env` file configured with correct credentials
 - [ ] Migrations applied successfully
 - [ ] Server started without errors
 - [ ] Access `http://localhost:8000/` in browser
+- [ ] Admin panel accessible at `http://localhost:8000/admin/`
 
 ## Common Issues & Solutions
 
-### Issue: "ModuleNotFoundError: No module named 'django'"
-
-**Solution:** Virtual environment not activated. Run:
-
-```powershell
-.venv\Scripts\Activate.ps1
-```
-
-### Issue: "Error loading MySQLdb module"
+### Issue: "No module named 'MySQLdb'"
 
 **Solution:** Install mysqlclient:
 
 ```powershell
-pip install mysqlclient
+pip install mysqlclient==2.2.0
 ```
 
-Or switch to SQLite (see Step 5, Option A).
+### Issue: "Access denied for user 'voting_user'@'localhost'"
+
+**Solution:** Verify MySQL credentials in `.env` file match your MySQL setup:
+
+```powershell
+# Test MySQL connection
+mysql -u voting_user -p -h localhost
+```
+
+Enter the password from your `.env` file.
+
+### Issue: "Port 3306 already in use" (Docker)
+
+**Solution:** Change port in `docker-compose.yml`:
+
+```yaml
+ports:
+  - "3307:3306" # Use 3307 instead
+```
 
 ### Issue: "Port 8000 already in use"
 
@@ -147,13 +183,41 @@ Or switch to SQLite (see Step 5, Option A).
 python manage.py runserver 8001
 ```
 
-### Issue: "InconsistentMigrationHistory"
+Or in Docker:
 
-**Solution:** Delete `db.sqlite3` and rerun migrations:
+```yaml
+ports:
+  - "8001:8000"
+```
+
+### Issue: "Cannot connect to MySQL" (Docker)
+
+**Solution:** Ensure containers are running:
 
 ```powershell
-Remove-Item db.sqlite3
+docker-compose ps
+docker-compose logs db
+docker-compose up --build
+```
+
+### Issue: "InconsistentMigrationHistory"
+
+**Solution:** Fresh database setup:
+
+```powershell
+# For local MySQL
+mysql -u voting_user -p voting_system
+DROP DATABASE voting_system;
+CREATE DATABASE voting_system;
+exit
+
 python manage.py migrate
+```
+
+```powershell
+# For Docker
+docker-compose down -v
+docker-compose up
 ```
 
 ## Project Structure

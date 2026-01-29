@@ -1,8 +1,46 @@
 services:
+  db:
+    image: mysql:8.0
+    container_name: voting_system_db
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: voting_system
+      MYSQL_USER: voting_user
+      MYSQL_PASSWORD: voting_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+    networks:
+      - voting_network
+
   web:
     build: .
+    container_name: voting_system_web
     ports:
       - "8000:8000"
     volumes:
       - .:/app
+    environment:
+      DB_NAME: voting_system
+      DB_USER: voting_user
+      DB_PASSWORD: voting_password
+      DB_HOST: db
+      DB_PORT: 3306
     command: sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - voting_network
+
+volumes:
+  mysql_data:
+
+networks:
+  voting_network:
+    driver: bridge
