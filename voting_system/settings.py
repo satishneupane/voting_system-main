@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'elections.apps.ElectionsConfig',
     "corsheaders",
     "rest_framework",
+    "accounts",
 ]
 
 MIDDLEWARE = [
@@ -133,10 +134,11 @@ STATIC_URL = "static/"
 
 AUTH_USER_MODEL = 'elections.User'
 
-CORS_ALLOW_ORIGINS = [
-    "http://localhost:3000",
-    "http://localhost:8000",
-]
+CORS_ALLOW_ALL_ORIGINS = True
+# [
+#     "http://localhost:3000",
+#     "http://localhost:8000",
+# ]
 CORS_ALLOW_CREDENTIALS = True
 
 #----Session Settings----
@@ -160,3 +162,11 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ),
 }
+LOGIN_URL = '/elections/api/voter/login/'
+
+AUTHENTICATION_BACKENDS = [
+    "accounts.backends.VoterIDOrEmailBackend",
+    "django.contrib.auth.backends.ModelBackend",
+]
+EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+DEFAULT_FROM_EMAIL = "noreply@voting.com"

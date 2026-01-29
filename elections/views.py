@@ -50,15 +50,18 @@ def register_voter(request):
         name = data.get("name")
         email = data.get("email")
         password = data.get("password")
+        voter_id = data.get("voter_id")
         province_name = data.get("province_name")
         district_name = data.get("district_name")
         electoral_area_name = data.get("electoral_area_name")
 
-        if not all([name, email, password, province_name, district_name, electoral_area_name]):
+        if not all([name, email, password, voter_id, province_name, district_name, electoral_area_name]):
             return JsonResponse({"error": "All fields are required"}, status=400)
 
         if User.objects.filter(username=email).exists():
             return JsonResponse({"error": "User already exists"}, status=400)
+        if User.objects.filter(voter_id=voter_id).exists():
+            return JsonResponse({"error": "Voter ID already registered"}, status=400)
 
         province = Province.objects.get(name=province_name)
         district = District.objects.get(name=district_name, province=province)
@@ -73,6 +76,7 @@ def register_voter(request):
                 email=email,
                 password=password,
                 first_name=name,
+                voter_id=voter_id,
                 province=province,
                 district=district,
                 electoral_area=electoral_area,
@@ -100,10 +104,10 @@ def voter_login(request):
 
     try:
         data = json.loads(request.body)
-        email = data.get("email")
+        identifier = data.get("identifier")  # can be email or voter_id
         password = data.get("password")
 
-        user = authenticate(request, username=email, password=password)
+        user = authenticate(request, username=identifier, password=password)
         if not user:
             return JsonResponse({"error": "Invalid credentials"}, status=401)
 
@@ -130,9 +134,15 @@ def voter_logout(request):
 @require_POST
 @login_required
 def submit_vote_view(request):
-    vote_type = request.POST.get("vote_type")
-    candidate_id = request.POST.get("candidate_id")
-    party_id = request.POST.get("party_id")
+    # Parse JSON 
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+    vote_type = data.get("vote_type")
+    candidate_id = data.get("candidate_id")
+    party_id = data.get("party_id")
 
     # Convert NOTA votes from frontend (id=0) to None
     if vote_type == "FPTP" and str(candidate_id) == "0":
@@ -304,6 +314,7 @@ def voter_profile(request):
     return JsonResponse({
         "username": user.username,
         "email": user.email,
+        "voter_id": user.voter_id,
         "province": user.province.name if user.province else None,
         "district": user.district.name if user.district else None,
         "electoral_area": user.electoral_area.name if user.electoral_area else None,

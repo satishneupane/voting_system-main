@@ -37,14 +37,18 @@ class DistrictAdmin(admin.ModelAdmin):
 # -----------------------------
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
-    list_display = ('username', 'email', 'province', 'district', 'electoral_area', 'is_staff', 'is_active')
-    list_filter = ('province', 'district', 'is_staff', 'is_active')
-    search_fields = ('username', 'email')
+    list_display = ('username', 'email','first_name','voter_id',
+                    'province', 'district', 'electoral_area',
+                    'is_staff', 'is_superuser', 'is_active')
+    list_filter = ('province', 'district','is_superuser', 'is_staff', 'is_active')
+    search_fields = ('username', 'email', 'first_name','voter_id')
+    ordering = ('username',)
+    
     fieldsets = UserAdmin.fieldsets + (
-        ('Voting Details', {'fields': ('province', 'district', 'electoral_area')}),
+        ('Voting Details', {'fields': ('voter_id', 'province', 'district', 'electoral_area')}),
     )
     add_fieldsets = UserAdmin.add_fieldsets + (
-        ('Additional Info', {'fields': ('province', 'district', 'electoral_area')}),
+        ('Additional Info', {'fields': ('voter_id', 'province', 'district', 'electoral_area')}),
     )
     class Media:
         js = ("elections/admin.js",)  # Auto-filter districts JS

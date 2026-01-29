@@ -1,6 +1,7 @@
 from django.db import transaction
 from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404
+from django.core.mail import send_mail
 
 from elections.models import Vote, Candidate, Party, ElectionControl
 
@@ -60,8 +61,6 @@ def validate_candidate_strict(user, candidate_id):
 # =====================================================
 @transaction.atomic
 def submit_vote(user, vote_type, candidate_id=None, party_id=None):
-    from elections.models import Vote, Candidate, Party, ElectionControl
-
     # 1️⃣ Voting open check
     control = ElectionControl.objects.first()
     if not control or not control.is_voting_open:
@@ -73,30 +72,55 @@ def submit_vote(user, vote_type, candidate_id=None, party_id=None):
 
     # 3️⃣ FPTP vote
     if vote_type == "FPTP":
-        if not candidate_id:
-            raise ValidationError("candidate_id is required for FPTP vote.")
-        try:
-            candidate = Candidate.objects.get(id=candidate_id)
-        except Candidate.DoesNotExist:
-            raise ValidationError("Candidate does not exist.")
+        if candidate_id is None or str(candidate_id) == "0":
+            # NOTA vote
+            vote = Vote.objects.create(
+                voter=user,
+                vote_type="FPTP",
+                candidate=None,
+                province=user.province,
+                district=user.district,
+                electoral_area=user.electoral_area,
+            )
+        else:
+            try:
+                candidate = Candidate.objects.get(id=candidate_id)
+            except Candidate.DoesNotExist:
+                raise ValidationError("Candidate does not exist.")
 
-        if candidate.electoral_area_id != user.electoral_area_id:
-            raise ValidationError("You cannot vote for a candidate outside your electoral area.")
-        return Vote.objects.create(
-            voter=user,
-            vote_type="FPTP",
-            candidate=candidate,
-            province=user.province,
-            district=user.district,
-            electoral_area=user.electoral_area,
+            if candidate.electoral_area_id != user.electoral_area_id:
+                raise ValidationError("You cannot vote for a candidate outside your electoral area.")
+
+            vote = Vote.objects.create(
+                voter=user,
+                vote_type="FPTP",
+                candidate=candidate,
+                province=user.province,
+                district=user.district,
+                electoral_area=user.electoral_area,
+            )
+
+        # 4️⃣ Send email confirmation AFTER vote is saved
+        send_mail(
+            "Vote Successfully Recorded",
+            f"Dear {user.first_name}, your vote has been securely recorded.",
+            "noreply@voting.com",
+            [user.email],
+            fail_silently=True,
         )
+        return vote
 
-    # 4️⃣ PR vote
-    elif vote_type == "PR":
+    # 5️⃣ PR vote (optional placeholder)
+    if vote_type == "PR":
         if not party_id:
-            raise ValidationError("party_id is required for PR vote.")
-        party = get_object_or_404(Party, id=party_id, is_active=True)
-        return Vote.objects.create(
+            raise ValidationError("Party must be selected for PR voting.")
+
+        try:
+            party = Party.objects.get(id=party_id)
+        except Party.DoesNotExist:
+            raise ValidationError("Party does not exist.")
+
+        vote = Vote.objects.create(
             voter=user,
             vote_type="PR",
             party=party,
@@ -105,8 +129,18 @@ def submit_vote(user, vote_type, candidate_id=None, party_id=None):
             electoral_area=user.electoral_area,
         )
 
-    else:
-        raise ValidationError("Invalid vote_type")
+        # Email confirmation
+        send_mail(
+            "Vote Successfully Recorded",
+            f"Dear {user.first_name}, your PR vote has been securely recorded.",
+            "noreply@voting.com",
+            [user.email],
+            fail_silently=True,
+        )
+        return vote
+
+    # If vote_type unknown
+    raise ValidationError("Invalid vote type.")
 
 
 # =====================================================

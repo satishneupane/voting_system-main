@@ -1,7 +1,7 @@
 from django.db import models
 from django.db.models import Q, F
 from django.core.exceptions import ValidationError
-from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.utils import timezone
 
 # ==============================
@@ -43,46 +43,87 @@ class ElectoralArea(models.Model):
     def __str__(self):
         return f"{self.name} - ({self.district.name})"
 
+#================
+# Admin Access
+#================
+class UserManager(BaseUserManager):
+    use_in_migrations = True
+
+    def _create_user(self, username, email, password, **extra_fields):
+        if not username:
+            raise ValueError("The Username must be set")
+        email = self.normalize_email(email)
+        user = self.model(username=username, email=email, **extra_fields)
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
+
+    def create_user(self, username, email=None, password=None, **extra_fields):
+        extra_fields.setdefault('is_staff', False)
+        extra_fields.setdefault('is_superuser', False)
+        return self._create_user(username, email, password, **extra_fields)
+
+    def create_superuser(self, username, email=None, password=None, **extra_fields):
+        # Auto-fill required foreign keys for superuser
+        from elections.models import Province, District, ElectoralArea
+
+        extra_fields.setdefault('is_staff', True)
+        extra_fields.setdefault('is_superuser', True)
+        extra_fields.setdefault('is_active', True)
+
+        # Assign first available province/district/electoral_area if not provided
+        if 'province' not in extra_fields or extra_fields['province'] is None:
+            extra_fields['province'] = Province.objects.first()
+        if 'district' not in extra_fields or extra_fields['district'] is None:
+            extra_fields['district'] = District.objects.first()
+        if 'electoral_area' not in extra_fields or extra_fields['electoral_area'] is None:
+            extra_fields['electoral_area'] = ElectoralArea.objects.first()
+
+        return self._create_user(username, email, password, **extra_fields)
 
 # ==============================
 # Custom User
 # ==============================
+
 class User(AbstractUser):
     province = models.ForeignKey(
-        Province,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL
-    )
-    district = models.ForeignKey(
-        District,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL
-    )
-    electoral_area = models.ForeignKey(
-        ElectoralArea,
+        'Province',
         null=True,
         blank=True,
         on_delete=models.SET_NULL
     )
 
-    def __str__(self):
-        return self.username
-    
     district = models.ForeignKey(
         'District',
         on_delete=models.CASCADE,
-        null=False,   # allow null temporarily
-        blank=False
+        null=True,
+        blank=True
     )
-    
+
     electoral_area = models.ForeignKey(
         'ElectoralArea',
         on_delete=models.SET_NULL,
         null=True,
         blank=True
     )
+
+    # 🆕 ADD VOTER ID HERE
+    voter_id = models.CharField(
+        max_length=30,
+        unique=True,
+        null=True,   # keep null=True for migration safety
+        blank=True
+    )
+    objects = UserManager()
+    def __str__(self):
+        return self.username
+    def clean(self):
+        if not self.is_superuser:
+            # For normal voters, enforce district and electoral_area
+            if not self.district:
+                raise ValidationError("District must be set for voters")
+            if not self.province:
+                raise ValidationError("Province must be set for voters")
 
 
 # ==============================
