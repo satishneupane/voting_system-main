@@ -134,11 +134,19 @@ def voter_logout(request):
 @require_POST
 @login_required
 def submit_vote_view(request):
-    # Parse JSON 
+    # Parse JSON or fallback to form data
     try:
-        data = json.loads(request.body)
+        content_type = (request.content_type or "").lower()
+        if "application/json" in content_type:
+            data = json.loads(request.body or b"{}")
+        else:
+            # If client sent form-encoded or multipart data, use request.POST
+            # `request.POST` will be an empty QueryDict for JSON bodies, so
+            # this fallback is safe.
+            data = request.POST.dict() if request.POST else {}
     except json.JSONDecodeError:
-        return JsonResponse({"error": "Invalid JSON"}, status=400)
+        # Fall back to POST data if JSON was invalid
+        data = request.POST.dict() if request.POST else {}
 
     vote_type = data.get("vote_type")
     candidate_id = data.get("candidate_id")
@@ -311,7 +319,7 @@ def voter_profile(request):
     # ✅ Check if already voted
     fptp_voted = Vote.objects.filter(voter=user, vote_type="FPTP").exists()
     pr_voted = Vote.objects.filter(voter=user, vote_type="PR").exists()
-
+    full_name = f"{user.first_name} {user.last_name}".strip()
     return JsonResponse({
         "username": full_name or user.username,
         "email": user.email,
