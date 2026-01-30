@@ -72,7 +72,7 @@ def register_voter(request):
 
         with transaction.atomic():
             User.objects.create_user(
-                username=email,
+                username=name,
                 email=email,
                 password=password,
                 first_name=name,
@@ -307,12 +307,13 @@ def voter_profile(request):
         return JsonResponse({"error": "Authentication required"}, status=403)
 
     user = request.user
+    full_name = f"{user.first_name} {user.last_name}".strip()
     # ✅ Check if already voted
     fptp_voted = Vote.objects.filter(voter=user, vote_type="FPTP").exists()
     pr_voted = Vote.objects.filter(voter=user, vote_type="PR").exists()
 
     return JsonResponse({
-        "username": user.username,
+        "username": full_name or user.username,
         "email": user.email,
         "voter_id": user.voter_id,
         "province": user.province.name if user.province else None,
@@ -330,11 +331,12 @@ def voter_profile(request):
 @login_required
 def voter_status(request):
     user = request.user
+    full_name = f"{user.first_name} {user.last_name}".strip()
     has_fptp = has_user_voted(user, "FPTP")
     has_pr = has_user_voted(user, "PR")
 
     return JsonResponse({
-        "username": user.username,
+        "username": full_name ,
         "email": user.email,
         "province": user.province.name if user.province else None,
         "district": user.district.name if user.district else None,

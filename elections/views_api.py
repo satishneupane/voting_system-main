@@ -21,8 +21,11 @@ def districts_by_province(request):
 @login_required
 def voter_profile(request):
     user = request.user
+    full_name = f"{user.first_name} {user.last_name}".strip()
     return JsonResponse({
-        "username": user.username,
+        "username": full_name,
+        "email": user.email,
+        "voter_id": user.voter_id,
         "province": {"id": user.province.id, "name": user.province.name},
         "district": {"id": user.district.id, "name": user.district.name},
         "electoral_area": {
